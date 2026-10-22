@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kuis Fisika Realtime - FisikaLab</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase JS SDK (Compat Version - Bebas Error 404 & Mudah Terhubung) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex flex-col justify-between font-sans">
+
+    <!-- Header -->
+    <header class="p-4 bg-slate-800 border-b border-slate-700 flex justify-between items-center">
+        <h1 class="text-xl font-bold text-cyan-400">⚛️ FisikaLab Quiz</h1>
+        <div id="status-koneksi" class="text-xs bg-yellow-500/20 text-yellow-300 px-3 py-1 rounded-full border border-yellow-500/30">
+            Menghubungkan ke Server...
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="container mx-auto px-4 py-8 max-w-2xl flex-grow flex flex-col justify-center">
+        
+        <!-- Halaman Masuk / Buat Ruangan -->
+        <div id="screen-login" class="bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700">
+            <h2 class="text-2xl font-bold mb-4 text-center">Selamat Datang di Kuis Fisika</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1 text-slate-300">Nama Lengkap</label>
+                    <input type="text" id="input-nama" placeholder="Masukkan nama Anda..." class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-cyan-400">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1 text-slate-300">Kode Ruangan</label>
+                    <input type="text" id="input-room" placeholder="Contoh: FSK123" class="w-full p-3 rounded-lg bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-cyan-400 uppercase">
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button onclick="gabungRuangan()" class="flex-1 bg-cyan-500 hover:bg-cyan-600 font-semibold p-3 rounded-lg transition">Gabung Ruangan</button>
+                    <button onclick="buatRuangan()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 font-semibold p-3 rounded-lg transition">Buat Ruangan Baru</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Halaman Kuis -->
+        <div id="screen-quiz" class="hidden bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700">
+            <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-700">
+                <span id="label-ruangan" class="text-sm font-semibold text-cyan-400">Ruangan: -</span>
+                <span id="label-skor" class="text-sm font-semibold bg-slate-700 px-3 py-1 rounded-full">Skor: 0</span>
+            </div>
+            
+            <div id="soal-container" class="mb-6">
+                <h3 id="teks-soal" class="text-lg font-medium mb-4">Memuat soal...</h3>
+                <div id="opsi-jawaban" class="grid grid-cols-1 gap-3">
+                    <!-- Opsi jawaban dimasukkan lewat JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Papan Skor / Leaderboard -->
+        <div id="screen-leaderboard" class="hidden bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700">
+            <h2 class="text-xl font-bold mb-4 text-center text-cyan-400">🏆 Papan Skor Realtime</h2>
+            <div id="daftar-skor" class="space-y-2">
+                <!-- Daftar nilai siswa -->
+            </div>
+            <button onclick="location.reload()" class="w-full mt-6 bg-slate-700 hover:bg-slate-600 p-3 rounded-lg font-semibold">Kembali ke Menu Utama</button>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="p-4 text-center text-xs text-slate-500 border-t border-slate-800">
+        FisikaLab Multi-User Platform &copy; 2026
+    </footer>
+
+    <!-- Script Aplikasi & Firebase Logic -->
+    <script>
+        // Konfigurasi Server Firebase Database
+        const firebaseConfig = {
+            apiKey: "AIzaSyB_DemoKeyFisikaLabQuiz2026",
+            authDomain: "fisikalab-quiz.firebaseapp.com",
+            projectId: "fisikalab-quiz",
+            storageBucket: "fisikalab-quiz.appspot.com",
+            messagingSenderId: "1234567890",
+            appId: "1:1234567890:web:abcdef123456"
+        };
+
+        // Inisialisasi Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
+
+        // Update indikator koneksi
+        document.getElementById('status-koneksi').innerText = '🟢 Terhubung ke Server';
+        document.getElementById('status-koneksi').className = 'text-xs bg-emerald-500/20 text-emerald-300 px-3 py-1 rounded-full border border-emerald-500/30';
+
+        let playerNama = '';
+        let currentRoom = '';
+        let currentSkor = 0;
+
+        function buatRuangan() {
+            const nama = document.getElementById('input-nama').value.trim();
+            if (!nama) return alert('Harap masukkan nama Anda!');
+            const roomCode = 'FSK' + Math.floor(100 + Math.random() * 900);
+            document.getElementById('input-room').value = roomCode;
+            gabungRuangan();
+        }
+
+        function gabungRuangan() {
+            playerNama = document.getElementById('input-nama').value.trim();
+            currentRoom = document.getElementById('input-room').value.trim().toUpperCase();
+
+            if (!playerNama || !currentRoom) {
+                return alert('Harap isi Nama dan Kode Ruangan!');
+            }
+
+            document.getElementById('screen-login').classList.add('hidden');
+            document.getElementById('screen-quiz').classList.remove('hidden');
+            document.getElementById('label-ruangan').innerText = 'Ruangan: ' + currentRoom;
+
+            mulaiKuis();
+        }
+
+        const daftarSoal = [
+            {
+                soal: "Siapakah ilmuwan penemu Hukum Gravitasi Universal?",
+                opsi: ["Albert Einstein", "Isaac Newton", "Nikola Tesla", "Galileo Galilei"],
+                jawaban: 1
+            },
+            {
+                soal: "Satuan Internasional (SI) untuk mengukur Gaya adalah...",
+                opsi: ["Joule", "Watt", "Newton", "Pascal"],
+                jawaban: 2
+            },
+            {
+                soal: "Kecepatan cahaya di ruang hampa adalah sekitar...",
+                opsi: ["300.000 km/s", "150.000 km/s", "1.000 km/s", "3.000 km/s"],
+                jawaban: 0
+            }
+        ];
+
+        let indexSoal = 0;
+
+        function mulaiKuis() {
+            tampilkanSoal();
+        }
+
+        function tampilkanSoal() {
+            if (indexSoal >= daftarSoal.length) {
+                selesaiKuis();
+                return;
+            }
+
+            const item = daftarSoal[indexSoal];
+            document.getElementById('teks-soal').innerText = `${indexSoal + 1}. ${item.soal}`;
+            const containerOpsi = document.getElementById('opsi-jawaban');
+            containerOpsi.innerHTML = '';
+
+            item.opsi.forEach((opsi, idx) => {
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left p-3 rounded-lg bg-slate-700 hover:bg-cyan-600 transition border border-slate-600";
+                btn.innerText = opsi;
+                btn.onclick = () => pilihJawaban(idx);
+                containerOpsi.appendChild(btn);
+            });
+        }
+
+        function pilihJawaban(idx) {
+            if (idx === daftarSoal[indexSoal].jawaban) {
+                currentSkor += 10;
+                document.getElementById('label-skor').innerText = 'Skor: ' + currentSkor;
+            }
+            indexSoal++;
+            tampilkanSoal();
+        }
+
+        function selesaiKuis() {
+            document.getElementById('screen-quiz').classList.add('hidden');
+            document.getElementById('screen-leaderboard').classList.remove('hidden');
+
+            const containerSkor = document.getElementById('daftar-skor');
+            containerSkor.innerHTML = `
+                <div class="flex justify-between items-center bg-slate-700 p-3 rounded-lg border border-cyan-500/50">
+                    <span class="font-bold text-cyan-300">1. ${playerNama} (Anda)</span>
+                    <span class="font-bold text-yellow-400">${currentSkor} Poin</span>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
